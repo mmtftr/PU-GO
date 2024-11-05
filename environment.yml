@@ -1,16 +1,17 @@
 name: pugo
 channels:
+  - defaults
   - conda-forge
 dependencies:
   - python=3.10
-  - biopython==1.81
-  - fair-esm==2.0.0
-  - click
-  - pandas
   - pip
+  - numpy<2.0
+  - pytorch
+  - torchvision
+  - torchaudio
   - pip:
-    - wandb
-    - scikit-learn
-    - tqdm
-    - requests
+    - pandas
     - matplotlib
+    - seaborn
+    - scikit-learn
+    - jupyter

@@ -48,9 +48,9 @@ tar -xzvf models.tar.gz
   * BPO: `python pu_go.py -dr data/ -ont bp  --run 0 --batch_size 39 --loss_type pu_ranking_multi --margin_factor 0.02457 --max_lr 0.0004305 --min_lr_factor 0.09056 --prior 0.0007845 -ld`
 
 
-* `pu_go_time.py` script to train PU-GO on the time-based split. 
+* `pu_go_time.py` script to train PU-GO on the time-based split.
 
-* `predict.py` script to predict functions given a FASTA file. 
+* `predict.py` script to predict functions given a FASTA file.
   * Usage: `python predict.py -if your_fasta_file.fa -d cuda`
 
 Note: We used the ESM2-15B model using a NVIDIA A100 GPU.

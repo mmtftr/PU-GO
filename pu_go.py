@@ -30,7 +30,7 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-         
+
 @ck.command()
 @ck.option(
     '--data_root', '-dr', default='data',
@@ -61,10 +61,10 @@ logger.setLevel(logging.DEBUG)
 @ck.option('--device', '-d', default='cuda', help='Device')
 @ck.option('--run', '-r', default='0', help='Run')
 def main(data_root, ont, model_name, batch_size, epochs, prior, alpha, loss_type, max_lr, min_lr_factor,  margin_factor, load, alpha_test, combine, device, run):
- 
+
     name = f"{ont}_{loss_type}"
     wandb_logger = wandb.init(project="final-dgpu-similarity-based", name= f"{name}_{run}", group=name)
-                                    
+
     go_file = f'{data_root}/go-basic.obo'
     model_name = f"{model_name}"
     model_file = f'{data_root}/{ont}/{model_name}_{run}.th'
@@ -79,8 +79,8 @@ def main(data_root, ont, model_name, batch_size, epochs, prior, alpha, loss_type
     valid_features, valid_labels, _ = valid_data
     test_features, test_labels, _ = test_data
 
-    net = PUModel(n_terms, prior, margin_factor, loss_type, terms_count).to(device)
-    
+    net = PUModel(n_terms, prior, margin_factor, loss_type, terms_count, device=device).to(device)
+
     train_loader = FastTensorDataLoader(
         train_features, train_labels, batch_size=batch_size, shuffle=True)
     valid_loader = FastTensorDataLoader(
@@ -93,7 +93,7 @@ def main(data_root, ont, model_name, batch_size, epochs, prior, alpha, loss_type
 
     train_steps = int(math.ceil(len(train_labels) / batch_size))
     step_size_up = 2 * train_steps
-    
+
     bce = nn.BCEWithLogitsLoss()
     optimizer = th.optim.Adam(net.parameters(), lr=max_lr)
     min_lr = max_lr * min_lr_factor
@@ -102,7 +102,7 @@ def main(data_root, ont, model_name, batch_size, epochs, prior, alpha, loss_type
     best_fmax = 0
     tolerance = 5
     curr_tolerance = tolerance
-        
+
     if not load:
         print('Training the model')
         for epoch in range(epochs):
@@ -110,14 +110,14 @@ def main(data_root, ont, model_name, batch_size, epochs, prior, alpha, loss_type
             train_loss = 0
             train_pu_loss = 0
             train_bce_loss = 0
-            
+
             with ck.progressbar(length=train_steps, show_pos=True) as bar:
                 for batch_features, batch_labels in train_loader:
                     bar.update(1)
                     batch_features = batch_features.to(device)
                     batch_labels = batch_labels.to(device)
                     pu_loss = net(batch_features, batch_labels)
-                    
+
                     batch_labels = (batch_labels == 1).float()
                     loss = pu_loss
                     optimizer.zero_grad()
@@ -126,13 +126,13 @@ def main(data_root, ont, model_name, batch_size, epochs, prior, alpha, loss_type
                     train_loss += loss.detach().item()
                     train_pu_loss += pu_loss.detach().item()
                     scheduler.step()
-            
+
             train_loss /= train_steps
             train_pu_loss /= train_steps
             train_bce_loss /= train_steps
 
             wandb.log({"train_loss": train_loss, "train_pu_loss": train_pu_loss, "train_bce_loss": train_bce_loss})
-            
+
             print('Validation')
             net.eval()
             with th.no_grad():
@@ -150,17 +150,17 @@ def main(data_root, ont, model_name, batch_size, epochs, prior, alpha, loss_type
 
                         batch_labels = (batch_labels == 1).float()
                         bce_loss = bce(logits, batch_labels)
-                        
+
                         valid_bce_loss += bce_loss.detach().item()
                         valid_pu_loss += pu_loss.detach().item()
-                        
+
                         logits = net.predict(batch_features)
                         preds = np.append(preds, logits.detach().cpu().numpy())
                 valid_pu_loss /= valid_steps
                 valid_bce_loss /= valid_steps
                 fmax = compute_fmax(valid_labels, preds)
                 wandb.log({"valid_pu_loss": valid_pu_loss, "valid_bce_loss": valid_bce_loss,  "valid_fmax": fmax})
-                                                        
+
             if fmax > best_fmax:
                 best_fmax = fmax
                 print('Saving model')
@@ -192,7 +192,7 @@ def main(data_root, ont, model_name, batch_size, epochs, prior, alpha, loss_type
                 batch_labels = (batch_labels == 1).float()
                 bce_loss = bce(logits, batch_labels)
                 batch_loss += bce_loss
-                
+
                 test_loss += batch_loss.detach().cpu().item()
                 logits = net.predict(batch_features)
                 preds.append(logits.detach().cpu().numpy())
@@ -202,18 +202,18 @@ def main(data_root, ont, model_name, batch_size, epochs, prior, alpha, loss_type
         print(f'Test Loss - {test_loss}, AUC - {roc_auc}')
 
     indexed_preds = [(i, preds[i]) for i in range(len(preds))]
-    
+
     with get_context("spawn").Pool(30) as p:
         results = []
         with tqdm(total=len(preds)) as pbar:
             for output in p.imap_unordered(partial(propagate_annots, go=go, terms_dict=terms_dict), indexed_preds, chunksize=200):
                 results.append(output)
                 pbar.update()
-        
+
         unordered_preds = [pred for pred in results]
         ordered_preds = sorted(unordered_preds, key=lambda x: x[0])
         preds = [pred[1] for pred in ordered_preds]
-        
+
     test_df['preds'] = preds
     test_df.to_pickle(out_file)
     test(data_root, ont, model_name, run, combine, alpha_test, False, wandb_logger)
@@ -235,7 +235,7 @@ def propagate_annots(preds, go, terms_dict):
     return idx, preds
 
 
-    
+
 def compute_roc(labels, preds):
     # Compute ROC curve and ROC area for each class
     fpr, tpr, _ = roc_curve(labels.flatten(), preds.flatten())
@@ -253,11 +253,11 @@ def load_data(data_root, ont, go):
     terms = terms_df['gos'].values.flatten()
     terms_dict = {v: i for i, v in enumerate(terms)}
     print('Terms', len(terms))
-    
+
     train_df = pd.read_pickle(f'{data_root}/{ont}/train_data.pkl')
     valid_df = pd.read_pickle(f'{data_root}/{ont}/valid_data.pkl')
     test_df = pd.read_pickle(f'{data_root}/{ont}/test_data.pkl')
-                        
+
     train_data = get_data(train_df, terms_dict, go, data_root)
     valid_data = get_data(valid_df, terms_dict, go, data_root)
     test_data = get_data(test_df, terms_dict, go, data_root)
@@ -286,5 +286,5 @@ def get_data(df, terms_dict, go_ont, data_root="data"):
 if __name__ == '__main__':
     main()
 
-    
-    
+
+
